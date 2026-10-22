@@ -24,16 +24,16 @@
 - [x] Servir `manus-routes.json` com a rota da página principal.
 - [x] Fazer o site iniciar na porta configurada do projeto e ser acessível pelo Preview.
 
-## Fase 2 — armazenamento local
+## Fase 2 — armazenamento local — concluída
 
 ### Conversas e preferências
 
-- [ ] Salvar todas as conversas localmente no navegador, preferencialmente com localStorage ou IndexedDB.
-- [ ] Permitir criar, renomear, abrir, excluir e pesquisar conversas.
-- [ ] Separar o histórico por IA utilizada.
-- [ ] Permitir exportar conversas em JSON, Markdown ou texto.
-- [ ] Salvar configurações da interface no navegador.
-- [ ] Explicar que uma API key armazenada no navegador continua exposta ao usuário e ao ambiente do navegador; não prometer segurança equivalente a um cofre de servidor.
+- [x] Salvar todas as conversas localmente no navegador usando `localStorage` versionado, com fallback seguro quando o armazenamento não estiver disponível.
+- [x] Permitir criar, renomear, abrir, excluir e pesquisar conversas, incluindo busca no conteúdo das mensagens.
+- [x] Separar o histórico por IA utilizada por meio do provedor associado a cada conversa e mensagem.
+- [x] Permitir exportar conversas em JSON, Markdown ou texto.
+- [x] Salvar configurações da interface no navegador, incluindo tema, provedor, conversa ativa, temperatura, limite de tokens e configurações não sensíveis do provedor.
+- [x] Explicar que uma API key armazenada no navegador continua exposta ao usuário e ao ambiente do navegador; a API key permanece desabilitada e não é incluída no schema persistido.
 
 ## Fase 3 — primeira integração
 
