@@ -1,13 +1,26 @@
 import { exportConversation, loadWorkspace, saveWorkspace } from "./storage.js";
 import { requestOpenAI } from "./providers/openai.js";
+import { requestAnthropic } from "./providers/anthropic.js";
+import { requestGemini } from "./providers/gemini.js";
+import { requestDeepSeek } from "./providers/deepseek.js";
+import { requestManus } from "./providers/manus.js";
 import { providerErrorMessage } from "./providers/provider-interface.js";
 
 const providers = {
   openai: { name: "OpenAI", model: "gpt-5.5", logo: "✳", logoClass: "provider-logo--openai", description: "Raciocínio e código" },
-  claude: { name: "Claude", model: "Claude Sonnet", logo: "A", logoClass: "provider-logo--claude", description: "Análise cuidadosa" },
-  gemini: { name: "Gemini", model: "Gemini Pro", logo: "✦", logoClass: "provider-logo--gemini", description: "Multimodal e pesquisa" },
-  deepseek: { name: "DeepSeek", model: "DeepSeek Chat", logo: "D", logoClass: "provider-logo--deepseek", description: "Código e matemática" },
-  manus: { name: "Manus", model: "Manus AI", logo: "M", logoClass: "provider-logo--manus", description: "Agente geral" }
+  claude: { name: "Claude", model: "claude-sonnet-5-5", logo: "A", logoClass: "provider-logo--claude", description: "Análise cuidadosa" },
+  gemini: { name: "Gemini", model: "gemini-3.8-flash", logo: "✦", logoClass: "provider-logo--gemini", description: "Multimodal e pesquisa" },
+  deepseek: { name: "DeepSeek", model: "deepseek-flash", logo: "D", logoClass: "provider-logo--deepseek", description: "Código e matemática" },
+  manus: { name: "Manus", model: "standard", logo: "M", logoClass: "provider-logo--manus", description: "Agente geral" }
+};
+
+const liveRequesters = { openai: requestOpenAI, claude: requestAnthropic, gemini: requestGemini, deepseek: requestDeepSeek, manus: requestManus };
+const modelOptions = {
+  openai: ["gpt-5.5"],
+  claude: ["claude-sonnet-5-5", "claude-haiku-5-5"],
+  gemini: ["gemini-3.8-flash", "gemini-flash-latest"],
+  deepseek: ["deepseek-flash", "deepseek-v4-pro"],
+  manus: ["standard", "lite", "max"]
 };
 
 const seedConversations = [
@@ -43,9 +56,37 @@ function providerOf(key) { return providers[key] ?? providers.openai; }
 function getProviderConfig(key = state.selectedProvider) { return preferences.providerConfigs?.[key] ?? {}; }
 function providerName(key) { return getProviderConfig(key).customName?.trim() || providerOf(key).name; }
 function providerModel(key) { return getProviderConfig(key).model?.trim() || providerOf(key).model; }
+function providerTemperature(key) { return Number.isFinite(Number(getProviderConfig(key).temperature)) ? Number(getProviderConfig(key).temperature) : Number(preferences.temperature ?? 0.7); }
+function providerMaxTokens(key) { return Number.isFinite(Number(getProviderConfig(key).maxTokens)) ? Number(getProviderConfig(key).maxTokens) : Number(preferences.maxTokens ?? 4000); }
 function providerLogo(providerKey, extraClass = "") { const provider = providerOf(providerKey); return `<span class="provider-logo ${provider.logoClass} ${extraClass}">${provider.logo}</span>`; }
 function escapeHtml(text) { return String(text).replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[character])); }
 function formatContent(content) { return escapeHtml(content).split(/\n\n/).map((paragraph) => `<p>${paragraph.replace(/`([^`]+)`/g, "<code>$1</code>")}</p>`).join(""); }
+function asTokenNumber(value) { return Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0; }
+function mergeUsage(previous, next) {
+  if (!next) return previous ?? null;
+  const input = asTokenNumber(next.input_tokens ?? next.prompt_tokens);
+  const output = asTokenNumber(next.output_tokens ?? next.completion_tokens);
+  return { input_tokens: asTokenNumber(previous?.input_tokens) + input, output_tokens: asTokenNumber(previous?.output_tokens) + output, total_tokens: asTokenNumber(previous?.total_tokens) + asTokenNumber(next.total_tokens || input + output) };
+}
+function estimateTokens(text) { return Math.max(1, Math.ceil(String(text || "").length / 4)); }
+function messageUsage(message) {
+  if (message.usage) return { input_tokens: asTokenNumber(message.usage.input_tokens), output_tokens: asTokenNumber(message.usage.output_tokens), total_tokens: asTokenNumber(message.usage.total_tokens) };
+  return message.role === "user" ? { input_tokens: estimateTokens(message.content), output_tokens: 0, total_tokens: estimateTokens(message.content) } : { input_tokens: 0, output_tokens: estimateTokens(message.content), total_tokens: estimateTokens(message.content) };
+}
+function getUsageStats() {
+  const stats = { input: 0, output: 0, total: 0, byProvider: {}, last24h: 0 };
+  const dayAgo = Date.now() - 86400000;
+  conversations.forEach((conversation) => conversation.messages.forEach((message) => {
+    const providerKey = message.provider || conversation.provider || "openai";
+    const usage = messageUsage(message);
+    stats.input += usage.input_tokens; stats.output += usage.output_tokens; stats.total += usage.total_tokens;
+    stats.byProvider[providerKey] ??= { input: 0, output: 0, total: 0, messages: 0 };
+    stats.byProvider[providerKey].input += usage.input_tokens; stats.byProvider[providerKey].output += usage.output_tokens; stats.byProvider[providerKey].total += usage.total_tokens; stats.byProvider[providerKey].messages += 1;
+    if (Number.isFinite(Number(message.createdAt)) && Number(message.createdAt) >= dayAgo) stats.last24h += usage.total_tokens;
+  }));
+  return stats;
+}
+function formatTokens(value) { return Math.round(value).toLocaleString("pt-BR"); }
 
 function saveWorkspaceState() {
   preferences.theme = document.documentElement.dataset.theme === "light" ? "light" : "dark";
@@ -121,6 +162,7 @@ function renderAll() {
   renderMessages();
   updateProviderContext();
   updateQuickSettingsUI();
+  renderUsageStats();
 }
 
 function copyMessage(index) {
@@ -150,6 +192,12 @@ function showToast(message) {
   setTimeout(() => { toast.classList.remove("toast--visible"); setTimeout(() => toast.remove(), 220); }, 2400);
 }
 
+function setUsagePanel(open) {
+  $("#usage-modal").hidden = !open;
+  $("#modal-backdrop").hidden = !open;
+  if (open) renderUsageStats();
+}
+
 function submitMessage(event) {
   event.preventDefault();
   const input = $("#message-input");
@@ -157,7 +205,7 @@ function submitMessage(event) {
   if (!value) return;
   const conversation = getConversation();
   conversation.provider = state.selectedProvider;
-  conversation.messages.push({ role: "user", time: "agora", content: value });
+  conversation.messages.push({ role: "user", time: "agora", createdAt: Date.now(), content: value });
   conversation.preview = value.slice(0, 180);
   conversation.time = "agora";
   input.value = "";
@@ -174,13 +222,13 @@ function simulateResponse(regenerate = false) {
   $("#typing-row .avatar").className = `avatar ${provider.logoClass}`;
   $("#typing-row .avatar").textContent = provider.logo;
   $(".send-button").disabled = true;
-  if (state.selectedProvider === "openai" && runtimeKeys.openai) {
-    requestLiveOpenAI();
+  if (runtimeKeys[state.selectedProvider] && liveRequesters[state.selectedProvider]) {
+    requestLiveProvider();
     return;
   }
   setTimeout(() => {
     const conversation = getConversation();
-    conversation.messages.push({ role: "assistant", provider: state.selectedProvider, time: "agora", content: regenerate ? "Esta é uma nova tentativa de resposta na interface de demonstração. O adaptador real será conectado em uma fase posterior." : `Recebi sua mensagem no modo de demonstração. Quando o adaptador de ${providerName(state.selectedProvider)} estiver configurado, esta resposta virá da API selecionada e será registrada com seus metadados de uso.` });
+    conversation.messages.push({ role: "assistant", provider: state.selectedProvider, time: "agora", createdAt: Date.now(), content: regenerate ? "Esta é uma nova tentativa de resposta no modo de demonstração. Configure uma chave de sessão para consultar o provedor real." : `Recebi sua mensagem no modo de demonstração. Configure uma chave de sessão de ${providerName(state.selectedProvider)} para consultar a API selecionada e registrar os metadados de uso.` });
     conversation.preview = conversation.messages.at(-1).content.slice(0, 180);
     conversation.time = "agora";
     $("#typing-row").hidden = true;
@@ -188,29 +236,37 @@ function simulateResponse(regenerate = false) {
     saveWorkspaceState();
     renderMessages();
     renderConversations($("#conversation-search").value);
+    renderUsageStats();
   }, 850);
 }
 
-async function requestLiveOpenAI() {
+async function requestLiveProvider() {
+  const providerKey = state.selectedProvider;
+  const provider = providerOf(providerKey);
   const conversation = getConversation();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 45000);
   try {
-    const result = await requestOpenAI({
-      apiKey: runtimeKeys.openai,
-      model: providerModel("openai"),
+    const result = await liveRequesters[providerKey]({
+      apiKey: runtimeKeys[providerKey],
+      model: providerModel(providerKey),
       messages: conversation.messages,
-      instructions: getProviderConfig("openai").systemPrompt || "",
-      temperature: preferences.temperature,
-      maxTokens: preferences.maxTokens,
-      signal: controller.signal
+      instructions: getProviderConfig(providerKey).systemPrompt || "",
+      temperature: providerTemperature(providerKey),
+      maxTokens: providerMaxTokens(providerKey),
+      signal: controller.signal,
+      taskId: conversation.remoteTaskIds?.[providerKey] || ""
     });
-    conversation.messages.push({ role: "assistant", provider: "openai", time: "agora", content: result.text });
-    conversation.usage = result.usage ?? conversation.usage;
+    conversation.messages.push({ role: "assistant", provider: providerKey, time: "agora", createdAt: Date.now(), usage: result.usage, content: result.text });
+    if (result.taskId) {
+      conversation.remoteTaskIds ??= {};
+      conversation.remoteTaskIds[providerKey] = result.taskId;
+    }
+    conversation.usage = mergeUsage(conversation.usage, result.usage);
     conversation.preview = result.text.slice(0, 180);
     conversation.time = "agora";
   } catch (error) {
-    conversation.messages.push({ role: "assistant", provider: "openai", time: "agora", content: `OpenAI não respondeu. ${providerErrorMessage(error)}` });
+    conversation.messages.push({ role: "assistant", provider: providerKey, time: "agora", createdAt: Date.now(), content: `${provider.name} não respondeu. ${providerErrorMessage(error)}` });
   } finally {
     clearTimeout(timeout);
     $("#typing-row").hidden = true;
@@ -218,6 +274,7 @@ async function requestLiveOpenAI() {
     saveWorkspaceState();
     renderMessages();
     renderConversations($("#conversation-search").value);
+    renderUsageStats();
   }
 }
 
@@ -229,20 +286,39 @@ function updateDraftCount() {
 }
 
 function updateQuickSettingsUI() {
-  const temperature = Number(preferences.temperature ?? 0.7);
-  const maxTokens = String(preferences.maxTokens ?? 4000);
+  const temperature = providerTemperature(state.selectedProvider);
+  const maxTokens = String(providerMaxTokens(state.selectedProvider));
   $("#temperature-input").value = String(temperature);
   $("#temperature-value").textContent = temperature.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   $("#max-tokens-input").value = maxTokens;
 }
 
+function renderUsageStats() {
+  const conversation = getConversation();
+  const currentTotal = conversation?.messages.reduce((sum, message) => sum + messageUsage(message).total_tokens, 0) ?? 0;
+  const stats = getUsageStats();
+  $("#activity-total").textContent = `${formatTokens(currentTotal)} tokens`;
+  $("#activity-session").textContent = `${formatTokens(stats.last24h)} tokens`;
+  $("#activity-trend").textContent = conversation?.usage ? "API" : "estimado";
+  const rows = Object.entries(stats.byProvider).sort(([, first], [, second]) => second.total - first.total).map(([key, usage]) => `<div class="usage-summary__row"><span>${escapeHtml(providerName(key))}</span><strong>${formatTokens(usage.total)} tokens</strong></div>`).join("");
+  $("#usage-summary").innerHTML = `<div class="usage-summary__total"><strong>${formatTokens(stats.total)} tokens</strong><span>${formatTokens(stats.input)} entrada · ${formatTokens(stats.output)} saída</span></div>${rows || `<div class="empty-search">Ainda não há mensagens para medir.</div>`}`;
+}
+
 function syncSettingsModal() {
   const config = getProviderConfig();
-  $("#provider-model-input").value = config.model || providerOf(state.selectedProvider).model;
+  const provider = providerOf(state.selectedProvider);
+  const modelInput = $("#provider-model-input");
+  const selectedModel = config.model || provider.model;
+  const options = [...(modelOptions[state.selectedProvider] ?? [provider.model])];
+  if (selectedModel && !options.includes(selectedModel)) options.push(selectedModel);
+  modelInput.innerHTML = options.map((model) => `<option value="${escapeHtml(model)}">${escapeHtml(model)}</option>`).join("");
+  modelInput.value = selectedModel;
   $("#provider-name-input").value = config.customName || "";
   $("#system-prompt-input").value = config.systemPrompt || "";
   $("#provider-api-key-input").value = runtimeKeys[state.selectedProvider] || "";
-  $("#provider-api-key-input").disabled = state.selectedProvider !== "openai";
+  $("#provider-api-key-label").textContent = `Chave ${provider.name} · somente sessão`;
+  $("#provider-api-key-input").setAttribute("aria-label", `Chave ${provider.name}`);
+  $("#provider-api-key-input").disabled = false;
 }
 
 function saveProviderSettings() {
@@ -250,15 +326,16 @@ function saveProviderSettings() {
   preferences.providerConfigs[state.selectedProvider] = {
     model: $("#provider-model-input").value,
     customName: $("#provider-name-input").value.trim().slice(0, 120),
-    systemPrompt: $("#system-prompt-input").value.slice(0, 10000)
+    systemPrompt: $("#system-prompt-input").value.slice(0, 10000),
+    temperature: Number($("#temperature-input").value),
+    maxTokens: Number($("#max-tokens-input").value)
   };
   saveWorkspaceState();
   updateProviderContext();
 }
 
 function updateRuntimeKey() {
-  if (state.selectedProvider !== "openai") return;
-  runtimeKeys.openai = $("#provider-api-key-input").value.trim();
+  runtimeKeys[state.selectedProvider] = $("#provider-api-key-input").value.trim();
 }
 
 function closeProviderMenu() { $("#provider-menu").classList.remove("provider-menu--open"); $("#provider-pill").setAttribute("aria-expanded", "false"); }
@@ -322,16 +399,21 @@ $("#toggle-theme").addEventListener("click", () => setTheme(document.documentEle
 $("#new-chat").addEventListener("click", () => { const id = `draft-${Date.now()}`; conversations.unshift({ id, title: "Nova conversa", provider: state.selectedProvider, time: "agora", preview: "Conversa vazia", messages: [] }); state.selectedConversation = id; saveWorkspaceState(); $("#message-input").value = ""; updateDraftCount(); showToast("Nova conversa criada e salva localmente."); renderAll(); closeSidebar(); });
 $("#open-sidebar").addEventListener("click", () => $("#sidebar").classList.add("sidebar--open"));
 $("#close-sidebar").addEventListener("click", closeSidebar);
+$("#close-inspector").addEventListener("click", () => { $("#inspector").hidden = true; $("#toggle-inspector").setAttribute("aria-pressed", "true"); });
+$("#toggle-inspector").addEventListener("click", () => { const hidden = $("#inspector").hidden; $("#inspector").hidden = !hidden; $("#toggle-inspector").setAttribute("aria-pressed", String(!hidden)); });
 $("#open-settings").addEventListener("click", () => { syncSettingsModal(); $("#settings-modal").hidden = false; $("#modal-backdrop").hidden = false; });
+$("#usage-panel-toggle").addEventListener("click", () => setUsagePanel(true));
+$("#close-usage-panel").addEventListener("click", () => setUsagePanel(false));
+$("#close-usage-panel-footer").addEventListener("click", () => setUsagePanel(false));
 $("#close-settings").addEventListener("click", () => { updateRuntimeKey(); saveProviderSettings(); $("#settings-modal").hidden = true; $("#modal-backdrop").hidden = true; });
 $("#cancel-settings").addEventListener("click", () => { $("#settings-modal").hidden = true; $("#modal-backdrop").hidden = true; });
 $("#save-settings").addEventListener("click", () => { updateRuntimeKey(); saveProviderSettings(); $("#settings-modal").hidden = true; $("#modal-backdrop").hidden = true; showToast("Preferências salvas neste navegador. A chave fica apenas nesta sessão."); });
-$("#modal-backdrop").addEventListener("click", () => { updateRuntimeKey(); saveProviderSettings(); $("#settings-modal").hidden = true; $("#modal-backdrop").hidden = true; });
+$("#modal-backdrop").addEventListener("click", () => { if (!$("#usage-modal").hidden) { setUsagePanel(false); return; } updateRuntimeKey(); saveProviderSettings(); $("#settings-modal").hidden = true; $("#modal-backdrop").hidden = true; });
 $$("[data-setting-theme]").forEach((button) => button.addEventListener("click", () => setTheme(button.dataset.settingTheme)));
-$("#temperature-input").addEventListener("input", (event) => { preferences.temperature = Number(event.target.value); $("#temperature-value").textContent = Number(event.target.value).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 }); saveWorkspaceState(); });
-$("#max-tokens-input").addEventListener("change", (event) => { preferences.maxTokens = Number(event.target.value); saveWorkspaceState(); });
+$("#temperature-input").addEventListener("input", (event) => { const value = Number(event.target.value); preferences.temperature = value; preferences.providerConfigs ??= {}; preferences.providerConfigs[state.selectedProvider] = { ...preferences.providerConfigs[state.selectedProvider], temperature: value }; $("#temperature-value").textContent = value.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 }); saveWorkspaceState(); });
+$("#max-tokens-input").addEventListener("change", (event) => { const value = Number(event.target.value); preferences.maxTokens = value; preferences.providerConfigs ??= {}; preferences.providerConfigs[state.selectedProvider] = { ...preferences.providerConfigs[state.selectedProvider], maxTokens: value }; saveWorkspaceState(); });
 $("#provider-api-key-input").addEventListener("input", updateRuntimeKey);
-document.addEventListener("keydown", (event) => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); $("#new-chat").click(); } if (event.key === "/" && document.activeElement.tagName !== "INPUT" && document.activeElement.tagName !== "TEXTAREA") { event.preventDefault(); $("#conversation-search").focus(); } if (event.key === "Escape") { closeProviderMenu(); closeExportMenu(); $("#settings-modal").hidden = true; $("#modal-backdrop").hidden = true; closeSidebar(); } });
+document.addEventListener("keydown", (event) => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); $("#new-chat").click(); } if (event.key === "/" && document.activeElement.tagName !== "INPUT" && document.activeElement.tagName !== "TEXTAREA") { event.preventDefault(); $("#conversation-search").focus(); } if (event.key === "Escape") { closeProviderMenu(); closeExportMenu(); $("#settings-modal").hidden = true; setUsagePanel(false); $("#modal-backdrop").hidden = true; closeSidebar(); } });
 
 setTheme(preferences.theme, false);
 renderAll();

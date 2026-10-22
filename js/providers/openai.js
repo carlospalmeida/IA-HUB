@@ -1,4 +1,4 @@
-import { normalizeMessages, ProviderError } from "./provider-interface.js";
+import { createClientRequestId, normalizeMessages, ProviderError, requestJson } from "./provider-interface.js";
 
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 
@@ -14,26 +14,7 @@ export async function requestOpenAI({ apiKey, model = "gpt-5.5", messages, instr
   const body = { model: model.trim() || "gpt-5.5", input, max_output_tokens: maxTokens };
   if (instructions.trim()) body.instructions = instructions.trim();
   if (Number.isFinite(Number(temperature))) body.temperature = Number(temperature);
-  const clientRequestId = globalThis.crypto?.randomUUID?.() ?? `iahub-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-
-  let response;
-  try {
-    response = await fetch(OPENAI_RESPONSES_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey.trim()}`, "X-Client-Request-Id": clientRequestId },
-      body: JSON.stringify(body),
-      signal
-    });
-  } catch (error) {
-    throw new ProviderError("network_error", { code: "cors_or_network", cause: error });
-  }
-
-  let payload = null;
-  try { payload = await response.json(); } catch { payload = null; }
-  if (!response.ok) {
-    const providerMessage = payload?.error?.message;
-    throw new ProviderError(providerMessage || `OpenAI HTTP ${response.status}`, { code: "http_error", status: response.status });
-  }
+  const { payload, response } = await requestJson(OPENAI_RESPONSES_URL, { headers: { Authorization: `Bearer ${apiKey.trim()}`, "X-Client-Request-Id": createClientRequestId("openai") }, body, signal, provider: "openai" });
   return {
     text: extractText(payload),
     usage: payload?.usage ?? null,

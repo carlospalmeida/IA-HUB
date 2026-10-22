@@ -42,7 +42,7 @@
 - [x] Criar uma interface comum para adaptadores de IA.
 - [x] Normalizar mensagens, modelo, temperatura, limite máximo de tokens e prompt de sistema.
 - [x] Implementar o adaptador OpenAI Responses API em modo opt-in, com chave somente em memória e documentação das limitações; a execução real ainda depende de uma chave válida e de uma origem/rede que aceite a chamada.
-- [ ] Informar quando a chamada não puder ser feita diretamente pelo navegador.
+- [x] Informar quando a chamada não puder ser feita diretamente pelo navegador, incluindo falhas de rede/CORS, permissões e uso recomendado de backend/proxy.
 - [ ] Tratar loading, erro, timeout, rate limit e resposta parcial.
 - [ ] Não armazenar API keys em repositórios públicos.
 
@@ -50,27 +50,27 @@
 
 ### Provedores
 
-- [ ] Adicionar adaptadores separados para ChatGPT/OpenAI, Claude/Anthropic, Gemini/Google, DeepSeek e Manus.
-- [ ] Manter arquitetura extensível para outras IAs.
-- [ ] Permitir seleção de modelo e nome personalizado por provedor.
-- [ ] Permitir configurar temperatura, limite máximo de tokens e prompt de sistema por provedor.
+- [x] Adicionar adaptadores separados para ChatGPT/OpenAI, Claude/Anthropic, Gemini/Google, DeepSeek e Manus; o adaptador Manus trata a API pública como tarefa assíncrona com polling limitado.
+- [x] Manter arquitetura extensível para outras IAs por meio de `provider-interface.js`, `liveRequesters` e módulos independentes em `js/providers/`.
+- [x] Permitir seleção de modelo e nome personalizado por provedor.
+- [x] Permitir configurar temperatura, limite máximo de tokens e prompt de sistema por provedor.
 
 ### Tokens, custos e dashboard
 
-- [ ] Controlar tokens enviados e recebidos por conversa, por IA e por período.
+- [x] Controlar tokens enviados e recebidos por conversa, por IA e por período, usando metadados retornados pelo provedor e estimativa local quando eles não existem.
 - [ ] Exibir estimativa de custo quando o provedor disponibilizar preços.
 - [ ] Permitir definir limites de uso ou alertas quando determinado número de tokens for atingido.
-- [ ] Mostrar dashboard com consumo por IA.
-- [ ] Informar que estimativas locais não substituem a fatura oficial do provedor.
+- [x] Mostrar painel local com consumo total, entrada/saída, últimas 24 horas e distribuição por IA.
+- [x] Informar que estimativas locais não substituem a fatura oficial do provedor.
 
 ### Documentação para GitHub
 
-- [ ] Criar README com descrição, funcionalidades, instruções, prints ou sugestão de telas e aviso de uso autorizado.
-- [ ] Criar guia de instalação e execução local.
-- [ ] Criar instruções para obter API keys de cada provedor, sem pedir que sejam publicadas.
-- [ ] Explicar arquitetura do projeto e cada módulo JavaScript.
-- [ ] Criar guia para adicionar nova IA.
-- [ ] Explicar armazenamento local, tokens e custos.
-- [ ] Documentar segurança, privacidade, CORS e limitações.
-- [ ] Manter licença MIT e respeitar licenças das dependências e APIs.
-- [ ] Documentar melhorias futuras.
+- [x] Criar README com descrição, funcionalidades, instruções, estrutura de telas e aviso de uso autorizado.
+- [x] Criar guia de instalação e execução local.
+- [x] Criar instruções para obter API keys de cada provedor, sem pedir que sejam publicadas.
+- [x] Explicar arquitetura do projeto e cada módulo JavaScript.
+- [x] Criar guia para adicionar nova IA.
+- [x] Explicar armazenamento local, tokens e custos, incluindo limitações atuais e a necessidade de consultar a fatura oficial.
+- [x] Documentar segurança, privacidade, CORS e limitações.
+- [x] Manter licença MIT e respeitar licenças das dependências e APIs.
+- [x] Documentar melhorias futuras.

@@ -34,31 +34,28 @@ iahub/
 ├── README.md
 ├── LICENSE
 ├── css/
-│   ├── style.css
-│   └── themes.css
+│   └── style.css
 ├── js/
 │   ├── app.js
-│   ├── chat.js
 │   ├── storage.js
-│   ├── tokens.js
 │   └── providers/
 │       ├── provider-interface.js
 │       ├── openai.js
 │       ├── anthropic.js
-│       ├── google.js
+│       ├── gemini.js
 │       ├── deepseek.js
 │       └── manus.js
 ├── docs/
 │   ├── architecture.md
-│   ├── local-development.md
+│   ├── installation.md
+│   ├── openai-integration.md
+│   ├── provider-references.md
 │   ├── providers.md
-│   ├── security-privacy.md
-│   └── adding-provider.md
-└── .github/
-    └── workflows/
+│   └── security.md
+└── app.config.ts
 ```
 
-Na fase 1, apenas os arquivos necessários para a interface e o manifesto de rotas serão implementados. Os módulos de armazenamento, tokens e provedores serão adicionados quando suas fases começarem.
+O projeto é implementado incrementalmente: a interface e o manifesto foram seguidos por armazenamento local, adaptadores de provedores, métricas locais e documentação. Tokens e custos são calculados em `app.js` por enquanto; um módulo separado poderá ser extraído quando regras de preço e streaming forem adicionadas.
 
 ## Design
 

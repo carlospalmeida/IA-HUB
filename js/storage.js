@@ -16,24 +16,43 @@ function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+function normalizeUsage(usage) {
+  if (!usage || typeof usage !== "object") return null;
+  const input = Number(usage.input_tokens ?? usage.prompt_tokens);
+  const output = Number(usage.output_tokens ?? usage.completion_tokens);
+  const total = Number(usage.total_tokens);
+  if (![input, output, total].some((value) => Number.isFinite(value))) return null;
+  return {
+    input_tokens: Number.isFinite(input) ? Math.max(0, input) : 0,
+    output_tokens: Number.isFinite(output) ? Math.max(0, output) : 0,
+    total_tokens: Number.isFinite(total) ? Math.max(0, total) : Math.max(0, input || 0) + Math.max(0, output || 0)
+  };
+}
+
 function normalizeMessage(message = {}) {
   return {
     role: message.role === "assistant" ? "assistant" : "user",
     provider: typeof message.provider === "string" ? message.provider : undefined,
     time: typeof message.time === "string" ? message.time.slice(0, 40) : "agora",
-    content: typeof message.content === "string" ? message.content.slice(0, 100000) : ""
+    content: typeof message.content === "string" ? message.content.slice(0, 100000) : "",
+    createdAt: Number.isFinite(Number(message.createdAt)) ? Number(message.createdAt) : null,
+    usage: normalizeUsage(message.usage)
   };
 }
 
 function normalizeConversation(conversation = {}, index = 0) {
   const messages = Array.isArray(conversation.messages) ? conversation.messages.slice(0, MAX_MESSAGES_PER_CONVERSATION).map(normalizeMessage) : [];
   const fallbackTitle = messages.find((message) => message.role === "user")?.content.slice(0, 42) || "Nova conversa";
+  const remoteTaskIds = conversation.remoteTaskIds && typeof conversation.remoteTaskIds === "object" ? Object.fromEntries(Object.entries(conversation.remoteTaskIds).filter(([key, value]) => typeof key === "string" && typeof value === "string").map(([key, value]) => [key.slice(0, 40), value.slice(0, 100)])) : {};
+  if (typeof conversation.remoteTaskId === "string" && conversation.remoteTaskId && !remoteTaskIds.manus) remoteTaskIds.manus = conversation.remoteTaskId.slice(0, 100);
   return {
     id: typeof conversation.id === "string" && conversation.id ? conversation.id.slice(0, 120) : `conversation-${index + 1}`,
     title: typeof conversation.title === "string" && conversation.title.trim() ? conversation.title.trim().slice(0, 120) : fallbackTitle,
     provider: typeof conversation.provider === "string" ? conversation.provider : "openai",
     time: typeof conversation.time === "string" ? conversation.time.slice(0, 40) : "agora",
     preview: typeof conversation.preview === "string" ? conversation.preview.slice(0, 180) : "Conversa vazia",
+    remoteTaskIds,
+    usage: normalizeUsage(conversation.usage),
     messages
   };
 }
@@ -43,7 +62,9 @@ function normalizePreferences(preferences = {}) {
   const providerConfigs = Object.fromEntries(Object.entries(configs).map(([provider, config]) => [provider, {
     model: typeof config?.model === "string" ? config.model.slice(0, 120) : "",
     customName: typeof config?.customName === "string" ? config.customName.slice(0, 120) : "",
-    systemPrompt: typeof config?.systemPrompt === "string" ? config.systemPrompt.slice(0, 10000) : ""
+    systemPrompt: typeof config?.systemPrompt === "string" ? config.systemPrompt.slice(0, 10000) : "",
+    temperature: Number.isFinite(Number(config?.temperature)) ? Math.min(2, Math.max(0, Number(config.temperature))) : null,
+    maxTokens: Number.isFinite(Number(config?.maxTokens)) ? Math.min(128000, Math.max(256, Number(config.maxTokens))) : null
   }]));
   return {
     ...defaultPreferences,
