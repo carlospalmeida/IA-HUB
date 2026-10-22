@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="IA Hub: um workspace para conversar com múltiplas inteligências artificiais." />
+    <title>IA Hub — seu workspace de IAs</title>
+    <link rel="stylesheet" href="./css/style.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebar" aria-label="Navegação de conversas">
+        <div class="sidebar__topbar">
+          <a class="brand" href="./" aria-label="IA Hub, início">
+            <span class="brand__mark" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span class="brand__text">IA<span>Hub</span></span>
+          </a>
+          <button class="icon-button sidebar__close" id="close-sidebar" type="button" aria-label="Fechar menu"><span aria-hidden="true">×</span></button>
+        </div>
+
+        <button class="new-chat-button" id="new-chat" type="button"><span class="new-chat-button__icon" aria-hidden="true">＋</span><span>Nova conversa</span><kbd>⌘ K</kbd></button>
+        <label class="search-field" for="conversation-search"><span class="search-field__icon" aria-hidden="true">⌕</span><input id="conversation-search" type="search" placeholder="Pesquisar conversas" autocomplete="off" /><kbd>/</kbd></label>
+
+        <div class="conversation-list-wrap">
+          <div class="section-label"><span>Conversas</span><span class="section-label__count" id="conversation-count">3</span></div>
+          <nav class="conversation-list" id="conversation-list" aria-label="Lista de conversas"></nav>
+        </div>
+
+        <div class="sidebar__bottom">
+          <div class="usage-preview">
+            <div class="usage-preview__heading"><span class="usage-preview__spark" aria-hidden="true">✦</span><span>Uso deste mês</span><span class="status-dot"></span></div>
+            <div class="usage-preview__value"><strong>18,4k</strong><span>/ 50k tokens</span></div>
+            <div class="progress"><span style="width: 37%"></span></div>
+            <p>Estimativa local · fase de demonstração</p>
+          </div>
+          <button class="sidebar-link" id="open-settings" type="button"><span class="sidebar-link__icon" aria-hidden="true">⚙</span><span>Configurações</span><span class="sidebar-link__shortcut">⌘ ,</span></button>
+          <div class="user-row"><span class="avatar avatar--user">CP</span><span class="user-row__details"><strong>Carlos Paulo</strong><small>Workspace local</small></span><button class="icon-button" type="button" aria-label="Mais opções do perfil">•••</button></div>
+        </div>
+      </aside>
+
+      <main class="main-panel">
+        <header class="topbar">
+          <button class="icon-button menu-toggle" id="open-sidebar" type="button" aria-label="Abrir menu"><span aria-hidden="true">☰</span></button>
+          <div class="topbar__context"><span class="eyebrow">Workspace / Conversa</span><h1 id="conversation-title">Mapeando o fluxo de autenticação</h1></div>
+          <div class="topbar__actions">
+            <button class="provider-pill" id="provider-pill" type="button" aria-haspopup="listbox" aria-expanded="false"><span class="provider-logo provider-logo--openai">✳</span><span id="provider-pill-name">OpenAI</span><span class="chevron" aria-hidden="true">⌄</span></button>
+            <div class="provider-menu" id="provider-menu" role="listbox" aria-label="Escolha uma IA"></div>
+            <button class="icon-button" id="toggle-theme" type="button" aria-label="Alternar tema claro e escuro"><span aria-hidden="true">◐</span></button>
+            <button class="icon-button desktop-only" type="button" aria-label="Mais ações da conversa"><span aria-hidden="true">•••</span></button>
+          </div>
+        </header>
+
+        <section class="chat-stage" aria-label="Conversa atual">
+          <div class="conversation-intro"><div class="conversation-intro__line"></div><span class="conversation-intro__date">Hoje, 10:42</span><div class="conversation-intro__line"></div></div>
+          <div class="message-list" id="message-list" aria-live="polite"></div>
+          <div class="typing-row" id="typing-row" hidden><span class="avatar avatar--openai">✳</span><div class="typing-bubble"><span></span><span></span><span></span><small id="typing-label">OpenAI está analisando…</small></div></div>
+        </section>
+
+        <section class="composer-area" aria-label="Enviar mensagem">
+          <div class="composer-hint"><span class="composer-hint__dot"></span><span>Você está conversando com <strong id="composer-provider">OpenAI</strong></span><button class="text-button" id="clear-draft" type="button">Limpar</button></div>
+          <form class="composer" id="composer-form">
+            <textarea id="message-input" rows="1" placeholder="Pergunte qualquer coisa…" aria-label="Mensagem"></textarea>
+            <div class="composer__footer"><div class="composer__tools"><button class="tool-button" type="button" aria-label="Adicionar anexo"><span aria-hidden="true">＋</span><span class="desktop-only">Anexar</span></button><button class="tool-button" type="button" aria-label="Adicionar contexto"><span aria-hidden="true">⌘</span><span class="desktop-only">Contexto</span></button></div><div class="composer__meta"><span id="draft-count">0 / 4.000</span><button class="send-button" type="submit" aria-label="Enviar mensagem"><span aria-hidden="true">↑</span></button></div></div>
+          </form>
+          <p class="composer-disclaimer">A IA pode cometer erros. Verifique informações importantes antes de usá-las.</p>
+        </section>
+      </main>
+
+      <aside class="inspector" id="inspector" aria-label="Detalhes da conversa">
+        <div class="inspector__header"><div><span class="eyebrow">Conversa atual</span><h2>Detalhes</h2></div><button class="icon-button" id="close-inspector" type="button" aria-label="Fechar detalhes">×</button></div>
+        <div class="inspector__section"><span class="inspector__label">Provedor ativo</span><div class="active-provider-card" id="active-provider-card"><span class="provider-logo provider-logo--openai">✳</span><span><strong>OpenAI</strong><small>GPT-5.5 · demonstração</small></span><span class="status-dot status-dot--large"></span></div></div>
+        <div class="inspector__section"><div class="inspector__section-heading"><span class="inspector__label">Configuração rápida</span><span class="tag">Preview</span></div><label class="setting-row"><span>Temperatura</span><span class="setting-value">0,7</span><input type="range" min="0" max="1" step="0.1" value="0.7" aria-label="Temperatura" /></label><label class="setting-row"><span>Limite de resposta</span><select aria-label="Limite de resposta"><option>4.000 tokens</option><option>8.000 tokens</option><option>16.000 tokens</option></select></label></div>
+        <div class="inspector__section inspector__section--grow"><div class="inspector__section-heading"><span class="inspector__label">Atividade</span><button class="text-button" type="button">Ver painel</button></div><div class="activity-card"><div class="activity-card__icon">↗</div><div><strong>18,4k tokens</strong><small>nesta conversa</small></div><span class="activity-card__trend">+12%</span></div><div class="activity-card activity-card--muted"><div class="activity-card__icon">◷</div><div><strong>2 min</strong><small>tempo de sessão</small></div></div></div>
+        <div class="inspector__footer"><span class="secure-mark">⌁</span><span>Dados permanecem no navegador<br /><small>nesta versão de demonstração</small></span></div>
+      </aside>
+    </div>
+
+    <div class="modal-backdrop" id="modal-backdrop" hidden></div>
+    <section class="settings-modal" id="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title" hidden>
+      <div class="settings-modal__header"><div><span class="eyebrow">Workspace</span><h2 id="settings-title">Configurações</h2></div><button class="icon-button" id="close-settings" type="button" aria-label="Fechar configurações">×</button></div>
+      <div class="settings-tabs"><button class="settings-tab settings-tab--active" type="button">Preferências</button><button class="settings-tab" type="button">Provedores</button><button class="settings-tab" type="button">Privacidade</button></div>
+      <div class="settings-content">
+        <div class="setting-block"><strong>Aparência</strong><p>Escolha como o IA Hub aparece para você.</p><div class="segmented"><button class="segmented__button segmented__button--active" type="button" data-setting-theme="dark">Escuro</button><button class="segmented__button" type="button" data-setting-theme="light">Claro</button></div></div>
+        <div class="setting-block"><strong>Provedor selecionado</strong><p>Campos preparados para a próxima fase. Nenhum valor é enviado ou salvo ainda.</p><label class="setting-row"><span>Modelo</span><select aria-label="Modelo da IA"><option>GPT-5.5 · demonstração</option><option>Selecionar depois</option></select></label><label class="setting-row"><span>Nome personalizado</span><input type="text" placeholder="Ex.: Analista de código" aria-label="Nome personalizado" /></label><label class="setting-row"><span>API key</span><input type="password" placeholder="Será configurada na Fase 3" aria-label="API key" disabled /></label></div>
+        <div class="setting-block"><strong>Próxima fase</strong><p>O armazenamento local, as chaves e as configurações por provedor serão ativados depois que a interface for validada.</p><div class="notice"><span>i</span><span>Nenhuma chave de API é solicitada ou armazenada nesta etapa.</span></div></div>
+      </div>
+      <div class="settings-modal__footer"><button class="secondary-button" id="cancel-settings" type="button">Fechar</button><button class="primary-button" id="save-settings" type="button">Concluído</button></div>
+    </section>
+    <script type="module" src="./js/app.js"></script>
+  </body>
+</html>
