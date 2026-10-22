@@ -1,7 +1,9 @@
 import { exportConversation, loadWorkspace, saveWorkspace } from "./storage.js";
+import { requestOpenAI } from "./providers/openai.js";
+import { providerErrorMessage } from "./providers/provider-interface.js";
 
 const providers = {
-  openai: { name: "OpenAI", model: "GPT-5.5", logo: "✳", logoClass: "provider-logo--openai", description: "Raciocínio e código" },
+  openai: { name: "OpenAI", model: "gpt-5.5", logo: "✳", logoClass: "provider-logo--openai", description: "Raciocínio e código" },
   claude: { name: "Claude", model: "Claude Sonnet", logo: "A", logoClass: "provider-logo--claude", description: "Análise cuidadosa" },
   gemini: { name: "Gemini", model: "Gemini Pro", logo: "✦", logoClass: "provider-logo--gemini", description: "Multimodal e pesquisa" },
   deepseek: { name: "DeepSeek", model: "DeepSeek Chat", logo: "D", logoClass: "provider-logo--deepseek", description: "Código e matemática" },
@@ -31,6 +33,7 @@ let conversations = workspace.conversations;
 let preferences = workspace.preferences;
 let state = { selectedConversation: preferences.selectedConversation, selectedProvider: preferences.selectedProvider, draft: "" };
 let persistenceWarningShown = false;
+const runtimeKeys = Object.create(null);
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -171,6 +174,10 @@ function simulateResponse(regenerate = false) {
   $("#typing-row .avatar").className = `avatar ${provider.logoClass}`;
   $("#typing-row .avatar").textContent = provider.logo;
   $(".send-button").disabled = true;
+  if (state.selectedProvider === "openai" && runtimeKeys.openai) {
+    requestLiveOpenAI();
+    return;
+  }
   setTimeout(() => {
     const conversation = getConversation();
     conversation.messages.push({ role: "assistant", provider: state.selectedProvider, time: "agora", content: regenerate ? "Esta é uma nova tentativa de resposta na interface de demonstração. O adaptador real será conectado em uma fase posterior." : `Recebi sua mensagem no modo de demonstração. Quando o adaptador de ${providerName(state.selectedProvider)} estiver configurado, esta resposta virá da API selecionada e será registrada com seus metadados de uso.` });
@@ -182,6 +189,36 @@ function simulateResponse(regenerate = false) {
     renderMessages();
     renderConversations($("#conversation-search").value);
   }, 850);
+}
+
+async function requestLiveOpenAI() {
+  const conversation = getConversation();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 45000);
+  try {
+    const result = await requestOpenAI({
+      apiKey: runtimeKeys.openai,
+      model: providerModel("openai"),
+      messages: conversation.messages,
+      instructions: getProviderConfig("openai").systemPrompt || "",
+      temperature: preferences.temperature,
+      maxTokens: preferences.maxTokens,
+      signal: controller.signal
+    });
+    conversation.messages.push({ role: "assistant", provider: "openai", time: "agora", content: result.text });
+    conversation.usage = result.usage ?? conversation.usage;
+    conversation.preview = result.text.slice(0, 180);
+    conversation.time = "agora";
+  } catch (error) {
+    conversation.messages.push({ role: "assistant", provider: "openai", time: "agora", content: `OpenAI não respondeu. ${providerErrorMessage(error)}` });
+  } finally {
+    clearTimeout(timeout);
+    $("#typing-row").hidden = true;
+    $(".send-button").disabled = false;
+    saveWorkspaceState();
+    renderMessages();
+    renderConversations($("#conversation-search").value);
+  }
 }
 
 function updateDraftCount() {
@@ -204,6 +241,8 @@ function syncSettingsModal() {
   $("#provider-model-input").value = config.model || providerOf(state.selectedProvider).model;
   $("#provider-name-input").value = config.customName || "";
   $("#system-prompt-input").value = config.systemPrompt || "";
+  $("#provider-api-key-input").value = runtimeKeys[state.selectedProvider] || "";
+  $("#provider-api-key-input").disabled = state.selectedProvider !== "openai";
 }
 
 function saveProviderSettings() {
@@ -215,6 +254,11 @@ function saveProviderSettings() {
   };
   saveWorkspaceState();
   updateProviderContext();
+}
+
+function updateRuntimeKey() {
+  if (state.selectedProvider !== "openai") return;
+  runtimeKeys.openai = $("#provider-api-key-input").value.trim();
 }
 
 function closeProviderMenu() { $("#provider-menu").classList.remove("provider-menu--open"); $("#provider-pill").setAttribute("aria-expanded", "false"); }
@@ -279,13 +323,14 @@ $("#new-chat").addEventListener("click", () => { const id = `draft-${Date.now()}
 $("#open-sidebar").addEventListener("click", () => $("#sidebar").classList.add("sidebar--open"));
 $("#close-sidebar").addEventListener("click", closeSidebar);
 $("#open-settings").addEventListener("click", () => { syncSettingsModal(); $("#settings-modal").hidden = false; $("#modal-backdrop").hidden = false; });
-$("#close-settings").addEventListener("click", () => { saveProviderSettings(); $("#settings-modal").hidden = true; $("#modal-backdrop").hidden = true; });
+$("#close-settings").addEventListener("click", () => { updateRuntimeKey(); saveProviderSettings(); $("#settings-modal").hidden = true; $("#modal-backdrop").hidden = true; });
 $("#cancel-settings").addEventListener("click", () => { $("#settings-modal").hidden = true; $("#modal-backdrop").hidden = true; });
-$("#save-settings").addEventListener("click", () => { saveProviderSettings(); $("#settings-modal").hidden = true; $("#modal-backdrop").hidden = true; showToast("Preferências salvas neste navegador."); });
-$("#modal-backdrop").addEventListener("click", () => { saveProviderSettings(); $("#settings-modal").hidden = true; $("#modal-backdrop").hidden = true; });
+$("#save-settings").addEventListener("click", () => { updateRuntimeKey(); saveProviderSettings(); $("#settings-modal").hidden = true; $("#modal-backdrop").hidden = true; showToast("Preferências salvas neste navegador. A chave fica apenas nesta sessão."); });
+$("#modal-backdrop").addEventListener("click", () => { updateRuntimeKey(); saveProviderSettings(); $("#settings-modal").hidden = true; $("#modal-backdrop").hidden = true; });
 $$("[data-setting-theme]").forEach((button) => button.addEventListener("click", () => setTheme(button.dataset.settingTheme)));
 $("#temperature-input").addEventListener("input", (event) => { preferences.temperature = Number(event.target.value); $("#temperature-value").textContent = Number(event.target.value).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 }); saveWorkspaceState(); });
 $("#max-tokens-input").addEventListener("change", (event) => { preferences.maxTokens = Number(event.target.value); saveWorkspaceState(); });
+$("#provider-api-key-input").addEventListener("input", updateRuntimeKey);
 document.addEventListener("keydown", (event) => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); $("#new-chat").click(); } if (event.key === "/" && document.activeElement.tagName !== "INPUT" && document.activeElement.tagName !== "TEXTAREA") { event.preventDefault(); $("#conversation-search").focus(); } if (event.key === "Escape") { closeProviderMenu(); closeExportMenu(); $("#settings-modal").hidden = true; $("#modal-backdrop").hidden = true; closeSidebar(); } });
 
 setTheme(preferences.theme, false);

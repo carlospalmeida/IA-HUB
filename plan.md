@@ -106,7 +106,7 @@ Adicionar `storage.js` com persistência local versionada. Implementar criar, re
 
 ### Fase 3 — primeira IA
 
-Escolher e implementar um único adaptador após validar CORS, autenticação e política do provedor. Criar `provider-interface.js`, normalizar mensagens, tratar streaming quando suportado e registrar erros sem revelar chaves. A integração deverá ser opt-in e ter modo de demonstração sem chave.
+O primeiro adaptador será o OpenAI Responses API. `provider-interface.js` normaliza mensagens e erros, enquanto `openai.js` faz uma chamada HTTP direta somente quando o usuário fornece uma chave de sessão. A chave não entra no `localStorage`, nas exportações ou no repositório. O modo direto é experimental para desenvolvimento local: a documentação da OpenAI recomenda manter chaves em backend, portanto a próxima evolução de produção deverá habilitar um proxy seguro e tratar CORS no servidor. Sem chave, o modo de demonstração continua disponível.
 
 ### Fase 4 — demais IAs e documentação
 

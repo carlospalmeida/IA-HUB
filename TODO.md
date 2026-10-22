@@ -35,13 +35,13 @@
 - [x] Salvar configurações da interface no navegador, incluindo tema, provedor, conversa ativa, temperatura, limite de tokens e configurações não sensíveis do provedor.
 - [x] Explicar que uma API key armazenada no navegador continua exposta ao usuário e ao ambiente do navegador; a API key permanece desabilitada e não é incluída no schema persistido.
 
-## Fase 3 — primeira integração
+## Fase 3 — primeira integração — em andamento
 
 ### Contrato de provedor
 
-- [ ] Criar uma interface comum para adaptadores de IA.
-- [ ] Normalizar mensagens, modelo, temperatura, limite máximo de tokens e prompt de sistema.
-- [ ] Implementar um primeiro provedor real somente depois de validar CORS, autenticação e documentação oficial.
+- [x] Criar uma interface comum para adaptadores de IA.
+- [x] Normalizar mensagens, modelo, temperatura, limite máximo de tokens e prompt de sistema.
+- [x] Implementar o adaptador OpenAI Responses API em modo opt-in, com chave somente em memória e documentação das limitações; a execução real ainda depende de uma chave válida e de uma origem/rede que aceite a chamada.
 - [ ] Informar quando a chamada não puder ser feita diretamente pelo navegador.
 - [ ] Tratar loading, erro, timeout, rate limit e resposta parcial.
 - [ ] Não armazenar API keys em repositórios públicos.
